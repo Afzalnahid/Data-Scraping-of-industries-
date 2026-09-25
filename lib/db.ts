@@ -4,6 +4,9 @@ import type { ContentType, Language, Platform } from "./config";
 export const sql = postgres(process.env.DATABASE_URL ?? "", {
   ssl: process.env.DATABASE_URL?.includes("localhost") ? false : "require",
   max: 3,
+  // Supabase's transaction pooler (port 6543, recommended for serverless)
+  // does not support prepared statements.
+  prepare: false,
 });
 
 export type PostStatus = "draft" | "approved" | "published" | "manual" | "rejected" | "failed";
