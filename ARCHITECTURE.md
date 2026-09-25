@@ -2,39 +2,40 @@
 
 ## Layout
 ```
-.
-├── CLAUDE.md                     # rules for Claude (Bangla, truthful, concise)
-├── AGENT.md                      # rules/roles for AI agents
-├── ARCHITECTURE.md               # this file
-├── README.md                     # results table + calculation + usage
-├── requirements.txt              # requests, beautifulsoup4
-├── data/
-│   └── member_counts_research.csv  # researched counts with sources
-├── scraper/
-│   └── scrape_members.py         # directory crawler for 5 associations
-└── output/                       # generated CSVs (git-ignored)
+app/
+  page.tsx               dashboard: approve drafts, Skool copy, metrics entry, insights
+  actions.ts             server actions (approve, reject, manual metrics)
+  api/cron/plan          daily  -> lib/jobs.planTomorrow
+  api/cron/publish       hourly -> lib/jobs.publishDue
+  api/cron/metrics       daily  -> lib/jobs.collectMetrics
+  api/poster             1080x1080 PNG poster (next/og), public
+lib/
+  config.ts              env config, platforms, content types, slots
+  db.ts                  Postgres client + Post type
+  generate.ts            Claude: writes a post (structured output)
+  strategy.ts            explore/exploit choice of slot, type, language, niche
+  jobs.ts                plan / publish / metrics jobs
+  cron.ts                CRON_SECRET check
+  platforms/             facebook.ts, linkedin.ts, x.ts (+ types, index)
+db/schema.sql            posts table
+proxy.ts                 Basic-auth for the dashboard
+vercel.json              cron schedules (UTC)
 ```
 
 ## Data flow
 ```
-association website ──HTTP──> scrape_members.py ──> output/<assoc>_members.csv
-                                               ├──> output/member_counts_scraped.csv (totals)
-                                               └──> output/<assoc>_sample.csv (--sample N: lead details)
-web/news research ───────────────────────────────> data/member_counts_research.csv ──> README.md
+plan cron ─> strategy.chooseArms ─> generate (Claude) ─> posts[draft]
+dashboard approve ─> posts[approved]
+publish cron ─> platform adapter ─> posts[published]   (skool -> posts[manual] -> "I posted it")
+metrics cron / manual entry ─> reach, reactions, comments, shares, score
+score history ─> strategy (next day's choices) + dashboard insights
 ```
 
-## Scraper design (`scraper/scrape_members.py`)
-- `get_soup(url)` – fetch + parse, 1 s delay, errors logged not raised.
-- `crawl_paginated(page_url, detail_pattern, pages)` – walks list pages, collects member detail links, stops when a page adds nothing new.
-- `extract_lead(url)` – (`--sample` only) opens a member detail page, collects label/value pairs (tables, `<dl>`, "Label: value" lines), maps them to `LEAD_FIELDS`, falls back to email/BD-mobile regex, keeps everything in `raw_fields`.
-- One function per association, registered in `ASSOCIATIONS`:
+## Post status
+`draft → approved → published` · `draft → rejected` · `approved → failed` (API error or missed 6h window) · skool: `approved → manual → published`
 
-| Key | Site | Method |
-|-----|------|--------|
-| bgmea | bgmea.com.bd/page/member-list?page=N | paginated links `/member/{id}` |
-| bkmea | bkmea.com/member/index.php?Index=all&Page=N | paginated links `MID=` |
-| bpamea | bgapmea.org/index.php/member/index/{offset} | offset pagination (step 20) |
-| bcmea | bcmea.org.bd/member-list/ | single HTML table |
-| flaxa | flaxa.org.bd | WordPress REST API, fallback `/memberlist/page/N/` |
-
-To add an association: write a `scrape_<name>()` returning a list of dicts (`name`, `url`, …) and add it to `ASSOCIATIONS`.
+## Learning
+- Arms per platform: slot_hour (8 options), content_type (8), language (en/bn), niche (NICHES).
+- Days 1–EXPLORE_DAYS: pick least-tried option per dimension.
+- Afterwards: best mean score (≥2 measured posts), with EXPLORE_RATE chance of least-tried.
+- Score = reactions + 2·comments + 3·shares + reach/100 (compared within one platform).

@@ -1,63 +1,41 @@
-# Data-Scraping-of-industries-
-this is a data scraping project of textile industries and the companies
+# Social Autopilot
 
-## Member companies of Bangladeshi export associations
+Writes a post every day for **Facebook Page, LinkedIn (personal), X and Skool** in English and Bangla, publishes it, measures engagement, and learns which **time, format, language and niche** work best.
 
-Research date: 25 September 2026. Raw figures: [`data/member_counts_research.csv`](data/member_counts_research.csv).
+## How it works
 
-| # | Association | Registered / claimed members | Active / working members | Source & date |
-|---|-------------|-----------------------------:|-------------------------:|---------------|
-| 1 | **BGMEA** – Bangladesh Garment Manufacturers and Exporters Association | 4,275 | 1,806 | Member-list counter on bgmea.com.bd (another crawl showed 4,248); active = 2025 audit (Dhaka 1,482 + Chattogram 324), TBS News |
-| 2 | **BKMEA** – Bangladesh Knitwear Manufacturers and Exporters Association | 2,540 | ~2,420 *(estimate)* | bkmea.com "At a Glance"; Just Style, Jul 2025. Active = 2,540 − ~120 closures (Jul 2023–Jun 2026) |
-| 3 | **BPAMEA** – Bangladesh Packaging & Accessories Manufacturers & Exporters Association (formerly BGAPMEA) | ~2,100 | ~2,100 *(no split published)* | bgapmea.org homepage (2025); TBS News "more than 2,100" |
-| 4 | **BCMEA** – Bangladesh Ceramic Manufacturers & Exporters Association | 75 | 75 | TBS supplement, mid-2026: 31 tiles + 20 tableware + 20 sanitaryware + 4 bricks |
-| 5 | **FLAXA** – Footwear Leathergoods & Accessories Exporters Association (formerly LFMEAB, renamed 5 Mar 2026) | ~190 *(estimate)* | ~190 | flaxa.org.bd directory has 19 pages × ~10 entries (181–190); no published total |
+1. **Plan** (daily cron, 22:00 Dhaka): for each platform, picks a time slot, content type, language and niche, and asks Claude to write the post. The post is saved as a draft.
+2. **Approve** on the dashboard (you can edit the text). Set `REQUIRE_APPROVAL=false` to skip this step.
+3. **Publish** (hourly cron): posts approved posts at their scheduled time. Skool has no API, so its posts show up on the dashboard for you to copy.
+4. **Measure** (daily cron): fetches reactions, comments, shares and reach from Facebook and X. LinkedIn personal analytics and Skool are entered by hand on the dashboard.
+5. **Learn**
+   - For the first `EXPLORE_DAYS` (7), it tries every slot and format evenly.
+   - After that, each choice follows the best average score, and 20% of choices keep experimenting.
+   - Score = reactions + 2×comments + 3×shares + reach/100.
 
-### Calculation
+Posters: `poster_quote` posts on Facebook get a 1080×1080 image from `/api/poster`. Poster headlines are always English, because the image renderer garbles Bangla.
 
-**Total registered / claimed members**
+## Platform limits
 
-```
-BGMEA 4,275 + BKMEA 2,540 + BPAMEA 2,100 + BCMEA 75 + FLAXA 190 = 9,180
-```
+| Platform | Auto-post | Auto-metrics |
+|---|---|---|
+| Facebook Page | ✅ | ✅ (reach metric name can change between Graph API versions) |
+| LinkedIn personal | ✅ text only | ❌ manual entry |
+| X | ✅ text only | ⚠️ may need a paid API tier; otherwise manual |
+| Skool | ❌ copy from dashboard | ❌ manual entry |
 
-**Total active / working members**
+## Setup
 
-```
-BGMEA 1,806 + BKMEA 2,420 + BPAMEA 2,100 + BCMEA 75 + FLAXA 190 = 6,591
-```
+1. Create a Postgres database and run `db/schema.sql` on it.
+2. Deploy to Vercel. Copy `.env.example` into the project's Environment Variables and fill it in.
+3. The crons are in `vercel.json`. The hourly publish cron needs a **Vercel Pro** plan, because Hobby only allows daily crons. On Hobby, call `/api/cron/publish` hourly from an external scheduler (e.g. cron-job.org) with the header `Authorization: Bearer $CRON_SECRET`.
+4. Open the app and log in with `DASHBOARD_PASSWORD`.
 
-So the five associations together have **about 9,180 member companies on their books**, of which **about 6,600 are active**.
-
-### Caveats
-
-- The official websites were not reachable from the research environment (network policy), so these figures come from search-engine indexes of the official pages and from news reports. They have not been checked against the live directories. Run the scraper below to get exact counts.
-- BGMEA's 4,275 includes closed/inactive factories. Its "at a glance" page still says "around 4,500", which is an older figure.
-- BKMEA's active number and the FLAXA total are estimates, not published figures.
-- BPAMEA's ~2,100 is a rounded figure the association publishes. Its online directory appears to hold only ~1,400 records.
-- Some companies belong to both BGMEA and BKMEA, so the grand total may count them twice.
-
-## Scraper
-
-`scraper/scrape_members.py` crawls each association's online member directory. It saves one CSV per association and a count summary into `output/`.
+## Development
 
 ```bash
-pip install -r requirements.txt
-python scraper/scrape_members.py            # all five
-python scraper/scrape_members.py bcmea      # just one
-python scraper/scrape_members.py bgmea --sample 10   # 10 leads with contact details
-```
-
-`--sample N` opens each member's detail page and writes `output/<assoc>_sample.csv` with: company name, reg. no, contact person, email, director info, MD name, mobile, address. The field labels on the live sites are not verified yet; check the `raw_fields` column and adjust `LEAD_FIELDS` in the script if a column is empty.
-
-This needs a normal internet connection. If an association returns 0, its website layout has probably changed. Adjust that association's URL pattern in the script.
-
-### Set up in `D:\data scraping` (Windows)
-
-```powershell
-cd D:\
-git clone -b claude/bangladesh-industry-scraper-eygd7e https://github.com/afzalnahid/data-scraping-of-industries-.git "data scraping"
-cd "data scraping"
-pip install -r requirements.txt
-python scraper\scrape_members.py
+npm install
+npm run dev        # http://localhost:3000
+npm test           # strategy + OAuth tests
+npm run typecheck
 ```

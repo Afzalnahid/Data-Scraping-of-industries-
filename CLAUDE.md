@@ -12,18 +12,22 @@ Keep these up to date whenever the project changes:
 - `ARCHITECTURE.md` – project structure and data flow
 
 ## Project
-Scrape member-company directories of Bangladeshi export associations
-(BGMEA, BKMEA, BPAMEA, BCMEA, FLAXA) and count members.
-See `ARCHITECTURE.md` for layout.
+Social Autopilot: Next.js app on Vercel that writes daily posts (English + Bangla)
+with Claude, publishes to Facebook Page / LinkedIn / X (Skool = manual copy),
+collects engagement and learns the best time, format, language and niche.
+See `ARCHITECTURE.md`.
 
 ## Commands
 ```bash
-pip install -r requirements.txt
-python scraper/scrape_members.py [bgmea|bkmea|bpamea|bcmea|flaxa ...]
-python scraper/scrape_members.py bgmea --sample 10   # lead details for 10 members
+npm install
+npm run dev
+npm test          # node --test (strategy, X OAuth)
+npm run typecheck
+npm run build
 ```
 
 ## Conventions
-- Research figures go in `data/member_counts_research.csv` with source URL and date.
-- Scraped output goes in `output/` (git-ignored).
-- Mark estimates clearly as ESTIMATE.
+- All config via env vars (`.env.example`); never commit secrets.
+- Platform code lives in `lib/platforms/<name>.ts` implementing `PlatformAdapter`.
+- Claude calls only in `lib/generate.ts` (Anthropic TS SDK, structured output, `fallbacks: "default"`).
+- Pure logic (strategy) must stay testable without DB or network.
