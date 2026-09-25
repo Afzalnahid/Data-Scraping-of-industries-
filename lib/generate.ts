@@ -1,10 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { config, type Platform } from "./config";
+import type { Platform } from "./config";
+import type { Settings } from "./settings";
 import type { Arms } from "./strategy";
-
-const client = new Anthropic();
 
 const PLATFORM_RULES: Record<Platform, string> = {
   facebook:
@@ -42,13 +41,17 @@ const PostSchema = z.object({
 export type GeneratedPost = z.infer<typeof PostSchema>;
 
 export async function generatePost(
+  settings: Settings,
   platform: Platform,
   arms: Arms,
   recentOpenings: string[],
 ): Promise<GeneratedPost> {
+  if (!settings.anthropicApiKey) throw new Error("Claude API key is not set (Settings page)");
+  const client = new Anthropic({ apiKey: settings.anthropicApiKey });
+
   const system = [
     "You write high-engagement social media posts for a personal brand.",
-    `Brand voice: ${config.brandVoice}`,
+    `Brand voice: ${settings.brandVoice}`,
     "Never invent statistics, quotes or facts presented as real. Hypothetical examples must be clearly framed as such.",
     "Return only the post itself: no preamble, no notes to the author.",
   ].join("\n");
@@ -69,7 +72,7 @@ export async function generatePost(
     const extra =
       attempt > 0 ? "\n\nYour previous draft was too long. It MUST be at most 270 characters." : "";
     const response = await client.beta.messages.parse({
-      model: config.model,
+      model: settings.model,
       max_tokens: 16000,
       thinking: { type: "adaptive" },
       betas: ["server-side-fallback-2026-07-01"],

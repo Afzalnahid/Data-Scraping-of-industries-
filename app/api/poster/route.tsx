@@ -20,7 +20,7 @@ async function loadFont(text: string, family: string): Promise<ArrayBuffer | nul
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const title = (params.get("title") ?? "").slice(0, 120) || "…";
-  const brand = process.env.BRAND_NAME ?? "";
+  const brand = (params.get("brand") ?? "").slice(0, 60);
   const font = await loadFont(title + brand, "Noto+Sans");
 
   return new ImageResponse(

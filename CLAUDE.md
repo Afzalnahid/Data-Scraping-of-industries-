@@ -21,13 +21,13 @@ See `ARCHITECTURE.md`.
 ```bash
 npm install
 npm run dev
-npm test          # node --test (strategy, X OAuth)
+npm test          # node --test (strategy, X OAuth, crypto)
 npm run typecheck
 npm run build
 ```
 
 ## Conventions
-- All config via env vars (`.env.example`); never commit secrets.
+- Only DATABASE_URL, CRON_SECRET, DASHBOARD_PASSWORD, APP_URL are env vars; everything else is a dashboard setting (`lib/settings.ts`). Never commit secrets.
 - Platform code lives in `lib/platforms/<name>.ts` implementing `PlatformAdapter`.
 - Claude calls only in `lib/generate.ts` (Anthropic TS SDK, structured output, `fallbacks: "default"`).
 - Pure logic (strategy) must stay testable without DB or network.

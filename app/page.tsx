@@ -1,125 +1,95 @@
-import { approvePost, enterMetrics, markManualPosted, rejectPost } from "./actions";
-import { config } from "@/lib/config";
+import { planNow, publishDueNow } from "./actions";
+import { Empty, Flash, PostMeta, type SearchParams } from "./ui";
+import { PLATFORM_LABELS } from "@/lib/config";
 import { sql, type Post } from "@/lib/db";
-import { insights } from "@/lib/strategy";
+import { getSettings, missingFor } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
-const fmt = (d: Date | null) =>
-  d
-    ? new Date(d.getTime() + config.timezoneOffsetHours * 3600_000).toISOString().slice(0, 16).replace("T", " ")
-    : "-";
-
-function Tags({ post }: { post: Post }) {
-  return (
-    <div className="meta">
-      <span className="tag">#{post.id}</span>
-      <span className="tag">{post.platform}</span>
-      <span className="tag">{post.content_type}</span>
-      <span className="tag">{post.language}</span>
-      <span className="tag">{post.niche}</span>
-      <span className="tag">{fmt(post.scheduled_at)}</span>
-    </div>
-  );
-}
-
-export default async function Dashboard() {
-  const posts = await sql<Post[]>`SELECT * FROM posts ORDER BY scheduled_at DESC LIMIT 200`;
-  const drafts = posts.filter((p) => p.status === "draft").reverse();
-  const manual = posts.filter((p) => p.status === "manual");
-  const done = posts.filter((p) => p.status === "published" || p.status === "failed").slice(0, 40);
-  const first = posts.at(-1)?.created_at;
+export default async function Overview({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const s = await getSettings();
+  const [counts] = await sql<{ drafts: number; scheduled: number; published7: number; failed: number; manual: number }[]>`
+    SELECT
+      count(*) FILTER (WHERE status = 'draft')::int AS drafts,
+      count(*) FILTER (WHERE status = 'approved')::int AS scheduled,
+      count(*) FILTER (WHERE status = 'published' AND published_at > now() - interval '7 days')::int AS published7,
+      count(*) FILTER (WHERE status = 'failed')::int AS failed,
+      count(*) FILTER (WHERE status = 'manual')::int AS manual
+    FROM posts`;
+  const upcoming = await sql<Post[]>`
+    SELECT * FROM posts WHERE status IN ('draft', 'approved') ORDER BY scheduled_at LIMIT 5`;
+  const [{ first }] = await sql<{ first: Date | null }[]>`SELECT min(created_at) AS first FROM posts`;
   const day = first ? Math.floor((Date.now() - first.getTime()) / 86_400_000) + 1 : 0;
 
+  const checks = [
+    { label: "Claude API key", ok: !!s.anthropicApiKey },
+    { label: `Niches (${s.niches.length})`, ok: s.niches.length > 0 },
+    { label: `Platforms selected (${s.platforms.length})`, ok: s.platforms.length > 0 },
+    ...s.platforms.map((p) => {
+      const missing = missingFor(s, p);
+      return { label: `${PLATFORM_LABELS[p]}${missing.length ? `: missing ${missing.join(", ")}` : ""}`, ok: !missing.length };
+    }),
+  ];
+  const ready = checks.every((c) => c.ok);
+  // Generation only needs Claude, niches and at least one platform that is ready.
+  const canGenerate =
+    !!s.anthropicApiKey && s.niches.length > 0 && s.platforms.some((p) => missingFor(s, p).length === 0);
+
   return (
-    <main>
-      <h1>Social Autopilot</h1>
+    <>
+      <Flash params={params} />
+      <h1>Overview</h1>
       <p className="muted">
         {day === 0
-          ? "No posts yet: the plan cron creates tomorrow's posts once a day."
-          : day <= config.exploreDays
-            ? `Exploration phase: day ${day} of ${config.exploreDays}. Trying every time slot and format.`
-            : `Learning phase: day ${day}. ${Math.round((1 - config.epsilon) * 100)}% of choices follow the best results.`}
-        {" "}Times shown in local time (UTC+{config.timezoneOffsetHours}).
+          ? "No posts yet. Finish the setup, then generate your first posts."
+          : day <= s.exploreDays
+            ? `Exploration phase: day ${day} of ${s.exploreDays}. Trying every time slot, format and language.`
+            : `Learning phase: day ${day}. ${Math.round((1 - s.epsilon) * 100)}% of choices follow what worked best.`}
       </p>
 
-      <h2>Waiting for approval ({drafts.length})</h2>
-      {drafts.length === 0 && <p className="muted">Nothing to approve.</p>}
-      {drafts.map((p) => (
-        <form key={p.id} className="card" action={approvePost}>
-          <Tags post={p} />
-          <input type="hidden" name="id" value={p.id} />
-          <textarea name="body" defaultValue={p.body} />
-          <div className="row">
-            <button type="submit">Approve</button>
-            <button type="submit" className="secondary" formAction={rejectPost}>Reject</button>
-            {p.platform === "x" && <span className="muted">{p.body.length}/280</span>}
-          </div>
-        </form>
-      ))}
+      <div className="stats">
+        <a className="stat" href="/posts?tab=review"><b>{counts.drafts}</b><span>Waiting for approval</span></a>
+        <a className="stat" href="/posts?tab=scheduled"><b>{counts.scheduled}</b><span>Scheduled</span></a>
+        <a className="stat" href="/posts?tab=skool"><b>{counts.manual}</b><span>Skool to post</span></a>
+        <a className="stat" href="/posts?tab=published"><b>{counts.published7}</b><span>Published (7 days)</span></a>
+        <a className="stat" href="/posts?tab=failed"><b>{counts.failed}</b><span>Failed</span></a>
+      </div>
 
-      <h2>Post manually on Skool ({manual.length})</h2>
-      {manual.map((p) => (
-        <form key={p.id} className="card" action={markManualPosted}>
-          <Tags post={p} />
-          <pre>{p.body}</pre>
-          <input type="hidden" name="id" value={p.id} />
-          <button type="submit">I posted it</button>
-        </form>
-      ))}
+      <section className="card">
+        <h2>Setup {ready ? "✅" : ""}</h2>
+        <ul className="checklist">
+          {checks.map((c) => (
+            <li key={c.label} className={c.ok ? "ok" : "todo"}>{c.ok ? "✓" : "✗"} {c.label}</li>
+          ))}
+        </ul>
+        {!ready && <a className="button" href="/settings">Open Settings</a>}
+      </section>
 
-      <h2>Published</h2>
-      {done.map((p) => (
-        <div key={p.id} className="card">
-          <Tags post={p} />
-          <pre>{p.body.slice(0, 280)}{p.body.length > 280 ? "…" : ""}</pre>
-          {p.error && <p className="error">{p.error}</p>}
-          {p.status === "published" && (
-            <form action={enterMetrics}>
-              <input type="hidden" name="id" value={p.id} />
-              <div className="metrics">
-                <input name="reach" type="number" min="0" placeholder="Reach" defaultValue={p.reach ?? ""} />
-                <input name="reactions" type="number" min="0" placeholder="Reactions" defaultValue={p.reactions ?? ""} />
-                <input name="comments" type="number" min="0" placeholder="Comments" defaultValue={p.comments ?? ""} />
-                <input name="shares" type="number" min="0" placeholder="Shares" defaultValue={p.shares ?? ""} />
-                <button type="submit">Save</button>
-              </div>
-              <p className="muted">
-                Score: {p.score?.toFixed(1) ?? "not measured"}
-                {p.metrics_source ? ` (${p.metrics_source})` : ""}
-              </p>
-            </form>
-          )}
+      <section className="card">
+        <h2>Run now</h2>
+        <p className="muted">
+          Posts are planned automatically every night (22:00 Dhaka) and published hourly. You can also run it yourself.
+          Generating takes up to a minute.
+        </p>
+        <div className="row">
+          <form action={planNow}><button type="submit" disabled={!canGenerate}>Generate tomorrow’s posts</button></form>
+          <form action={publishDueNow}><button type="submit" className="secondary">Publish due posts</button></form>
         </div>
-      ))}
+      </section>
 
-      <h2>What works best</h2>
-      {config.platforms.map((platform) => {
-        const rows = posts.filter((p) => p.platform === platform && p.status === "published");
-        return (
-          <div key={platform} className="card">
-            <strong>{platform}</strong>
-            <div className="grid">
-              {insights(rows).map(({ dimension, rows: options }) => (
-                <table key={dimension}>
-                  <thead>
-                    <tr><th>{dimension}</th><th>posts</th><th>avg score</th></tr>
-                  </thead>
-                  <tbody>
-                    {options.map((o) => (
-                      <tr key={o.option}>
-                        <td>{dimension === "slot_hour" ? `${o.option}:00` : o.option}</td>
-                        <td>{o.measured}/{o.tried}</td>
-                        <td>{o.avgScore?.toFixed(1) ?? "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ))}
-            </div>
+      <section>
+        <h2>Coming up</h2>
+        {upcoming.length === 0 && <Empty>Nothing scheduled.</Empty>}
+        {upcoming.map((p) => (
+          <div key={p.id} className="card compact">
+            <PostMeta post={p} tzOffset={s.tzOffset} />
+            <p className="preview">{p.body.slice(0, 160)}{p.body.length > 160 ? "…" : ""}</p>
+            <span className={`status status-${p.status}`}>{p.status === "draft" ? "needs approval" : "scheduled"}</span>
           </div>
-        );
-      })}
-    </main>
+        ))}
+      </section>
+    </>
   );
 }

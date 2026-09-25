@@ -1,7 +1,8 @@
 // X (Twitter) API v2 with OAuth 1.0a user context (tokens do not expire).
 // Reading metrics may require a paid API tier; failures fall back to manual entry.
 import crypto from "node:crypto";
-import { checkedJson, requireEnv, type PlatformAdapter } from "./types.ts";
+import type { Settings } from "../settings";
+import { checkedJson, need, type PlatformAdapter } from "./types.ts";
 
 const enc = (s: string) =>
   encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
@@ -39,20 +40,20 @@ export function oauth1Header(
   );
 }
 
-const creds = () => ({
-  key: requireEnv("X_API_KEY"),
-  secret: requireEnv("X_API_SECRET"),
-  token: requireEnv("X_ACCESS_TOKEN"),
-  tokenSecret: requireEnv("X_ACCESS_SECRET"),
+const creds = (s: Settings) => ({
+  key: need(s.x.apiKey, "X API key"),
+  secret: need(s.x.apiSecret, "X API key secret"),
+  token: need(s.x.accessToken, "X access token"),
+  tokenSecret: need(s.x.accessSecret, "X access token secret"),
 });
 
 export const x: PlatformAdapter = {
-  async publish(post) {
+  async publish(post, _poster, s) {
     const url = "https://api.x.com/2/tweets";
     const data = await checkedJson(
       await fetch(url, {
         method: "POST",
-        headers: { Authorization: oauth1Header("POST", url, {}, creds()), "Content-Type": "application/json" },
+        headers: { Authorization: oauth1Header("POST", url, {}, creds(s)), "Content-Type": "application/json" },
         body: JSON.stringify({ text: post.body }),
       }),
       "X publish",
@@ -60,12 +61,12 @@ export const x: PlatformAdapter = {
     return data.data.id;
   },
 
-  async fetchMetrics(id) {
+  async fetchMetrics(id, s) {
     const url = `https://api.x.com/2/tweets/${id}`;
     const query = { "tweet.fields": "public_metrics" };
     const data = await checkedJson(
       await fetch(`${url}?${new URLSearchParams(query)}`, {
-        headers: { Authorization: oauth1Header("GET", url, query, creds()) },
+        headers: { Authorization: oauth1Header("GET", url, query, creds(s)) },
       }),
       "X metrics",
     );
@@ -77,5 +78,14 @@ export const x: PlatformAdapter = {
       shares: (m.retweet_count ?? 0) + (m.quote_count ?? 0),
       reach: m.impression_count ?? null,
     };
+  },
+
+  async test(s) {
+    const url = "https://api.x.com/2/users/me";
+    const data = await checkedJson(
+      await fetch(url, { headers: { Authorization: oauth1Header("GET", url, {}, creds(s)) } }),
+      "X",
+    );
+    return `Connected as @${data.data?.username}`;
   },
 };

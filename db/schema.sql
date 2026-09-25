@@ -25,3 +25,10 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE INDEX IF NOT EXISTS posts_due_idx ON posts (status, scheduled_at);
 CREATE INDEX IF NOT EXISTS posts_platform_idx ON posts (platform, published_at);
+
+-- Dashboard settings; secret values are encrypted by the app.
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
