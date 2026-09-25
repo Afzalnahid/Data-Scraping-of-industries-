@@ -24,10 +24,21 @@ Posters: `poster_quote` posts on Facebook get a 1080×1080 image from `/api/post
 | X | ✅ text only | ⚠️ may need a paid API tier; otherwise manual |
 | Skool | ❌ copy from dashboard | ❌ manual entry |
 
+## Dashboard
+
+| Page | What you do there |
+|---|---|
+| **Overview** | Setup checklist, counts, "Generate tomorrow's posts" and "Publish due posts" buttons |
+| **Posts** | Review tab: edit, approve (posts at its scheduled time), approve & post now, reject. Also Scheduled, Skool (manual copy), Published (enter metrics), Failed (retry) |
+| **Insights** | Best time, format, language and niche per platform |
+| **Settings** | Paste the Claude key, niches, brand voice, platform tokens; "Test connection" per platform |
+
+Keys pasted on the Settings page are encrypted (AES-256-GCM, key derived from `SETTINGS_SECRET` or `CRON_SECRET`) before they are stored in the `settings` table. Changing that env var makes saved keys unreadable, and you then have to re-enter them.
+
 ## Setup
 
 1. Create a Postgres database and run `db/schema.sql` on it.
-2. Deploy to Vercel. Copy `.env.example` into the project's Environment Variables and fill it in.
+2. Deploy to Vercel and set the four variables in `.env.example`. Everything else is entered on the Settings page.
 3. The daily crons (plan, metrics) are in `vercel.json`. Vercel Hobby only allows daily crons, so the hourly **publish** job runs from GitHub Actions (`.github/workflows/publish-cron.yml`). Add the repository secrets `APP_URL` and `CRON_SECRET` in GitHub → Settings → Secrets and variables → Actions. GitHub may start scheduled runs several minutes late.
 4. Open the app and log in with `DASHBOARD_PASSWORD`.
 

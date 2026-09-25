@@ -1,41 +1,39 @@
 // Facebook Page via the Graph API. Needs a Page access token with
 // pages_manage_posts and pages_read_engagement.
-import { checkedJson, requireEnv, type PlatformAdapter } from "./types";
+import type { Settings } from "../settings";
+import { checkedJson, need, type PlatformAdapter } from "./types";
 
-const version = () => process.env.FB_GRAPH_VERSION ?? "v23.0";
-const graph = (path: string) => `https://graph.facebook.com/${version()}/${path}`;
+const graph = (s: Settings, path: string) => `https://graph.facebook.com/${s.fb.graphVersion}/${path}`;
 
 export const facebook: PlatformAdapter = {
-  async publish(post, posterUrl) {
-    const pageId = requireEnv("FB_PAGE_ID");
-    const token = requireEnv("FB_PAGE_TOKEN");
-    const form = new URLSearchParams({ access_token: token });
+  async publish(post, posterUrl, s) {
+    const pageId = need(s.fb.pageId, "Facebook Page ID");
+    const form = new URLSearchParams({ access_token: need(s.fb.token, "Facebook Page token") });
     let endpoint: string;
     if (posterUrl) {
-      endpoint = graph(`${pageId}/photos`);
+      endpoint = graph(s, `${pageId}/photos`);
       form.set("url", posterUrl);
       form.set("caption", post.body);
     } else {
-      endpoint = graph(`${pageId}/feed`);
+      endpoint = graph(s, `${pageId}/feed`);
       form.set("message", post.body);
     }
     const data = await checkedJson(await fetch(endpoint, { method: "POST", body: form }), "Facebook publish");
     return data.post_id ?? data.id;
   },
 
-  async fetchMetrics(postId) {
-    const token = requireEnv("FB_PAGE_TOKEN");
+  async fetchMetrics(postId, s) {
+    const token = need(s.fb.token, "Facebook Page token");
     const fields = "reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),shares";
     const data = await checkedJson(
-      await fetch(`${graph(postId)}?fields=${fields}&access_token=${token}`),
+      await fetch(`${graph(s, postId)}?fields=${fields}&access_token=${token}`),
       "Facebook metrics",
     );
     let reach: number | null = null;
     try {
       // Insight metric names change between Graph versions; reach is optional.
-      const metric = process.env.FB_REACH_METRIC ?? "post_impressions_unique";
       const ins = await checkedJson(
-        await fetch(`${graph(`${postId}/insights`)}?metric=${metric}&access_token=${token}`),
+        await fetch(`${graph(s, `${postId}/insights`)}?metric=${s.fb.reachMetric}&access_token=${token}`),
         "Facebook insights",
       );
       reach = ins.data?.[0]?.values?.[0]?.value ?? null;
@@ -48,5 +46,15 @@ export const facebook: PlatformAdapter = {
       shares: data.shares?.count ?? 0,
       reach,
     };
+  },
+
+  async test(s) {
+    const pageId = need(s.fb.pageId, "Facebook Page ID");
+    const token = need(s.fb.token, "Facebook Page token");
+    const data = await checkedJson(
+      await fetch(`${graph(s, pageId)}?fields=name&access_token=${token}`),
+      "Facebook",
+    );
+    return `Connected to Page “${data.name}”`;
   },
 };
