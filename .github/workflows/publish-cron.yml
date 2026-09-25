@@ -1,0 +1,24 @@
+# Vercel Hobby only allows daily crons, so the hourly publish job runs here.
+# Repository secrets needed: APP_URL (e.g. https://social-autopilot.vercel.app)
+# and CRON_SECRET (same value as in Vercel).
+name: Hourly publish
+
+on:
+  schedule:
+    - cron: "2 * * * *"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call publish endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL or CRON_SECRET secret is not set; skipping."
+            exit 0
+          fi
+          curl --fail-with-body -sS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/publish"

@@ -6,7 +6,7 @@ app/
   page.tsx               dashboard: approve drafts, Skool copy, metrics entry, insights
   actions.ts             server actions (approve, reject, manual metrics)
   api/cron/plan          daily  -> lib/jobs.planTomorrow
-  api/cron/publish       hourly -> lib/jobs.publishDue
+  api/cron/publish       hourly (GitHub Actions) -> lib/jobs.publishDue
   api/cron/metrics       daily  -> lib/jobs.collectMetrics
   api/poster             1080x1080 PNG poster (next/og), public
 lib/
@@ -19,7 +19,8 @@ lib/
   platforms/             facebook.ts, linkedin.ts, x.ts (+ types, index)
 db/schema.sql            posts table
 proxy.ts                 Basic-auth for the dashboard
-vercel.json              cron schedules (UTC)
+vercel.json              daily cron schedules (UTC), region bom1
+.github/workflows/publish-cron.yml  hourly call to /api/cron/publish
 ```
 
 ## Data flow
