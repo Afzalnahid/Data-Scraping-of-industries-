@@ -20,6 +20,7 @@ See `ARCHITECTURE.md` for layout.
 ```bash
 pip install -r requirements.txt
 python scraper/scrape_members.py [bgmea|bkmea|bpamea|bcmea|flaxa ...]
+python scraper/scrape_members.py bgmea --sample 10   # lead details for 10 members
 ```
 
 ## Conventions

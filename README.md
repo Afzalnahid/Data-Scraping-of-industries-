@@ -45,7 +45,10 @@ So the five associations together have **about 9,180 member companies on their b
 pip install -r requirements.txt
 python scraper/scrape_members.py            # all five
 python scraper/scrape_members.py bcmea      # just one
+python scraper/scrape_members.py bgmea --sample 10   # 10 leads with contact details
 ```
+
+`--sample N` opens each member's detail page and writes `output/<assoc>_sample.csv` with: company name, reg. no, contact person, email, director info, MD name, mobile, address. The field labels on the live sites are not verified yet; check the `raw_fields` column and adjust `LEAD_FIELDS` in the script if a column is empty.
 
 This needs a normal internet connection. If an association returns 0, its website layout has probably changed. Adjust that association's URL pattern in the script.
 

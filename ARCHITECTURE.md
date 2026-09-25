@@ -18,13 +18,15 @@
 ## Data flow
 ```
 association website ──HTTP──> scrape_members.py ──> output/<assoc>_members.csv
-                                               └──> output/member_counts_scraped.csv (totals)
+                                               ├──> output/member_counts_scraped.csv (totals)
+                                               └──> output/<assoc>_sample.csv (--sample N: lead details)
 web/news research ───────────────────────────────> data/member_counts_research.csv ──> README.md
 ```
 
 ## Scraper design (`scraper/scrape_members.py`)
 - `get_soup(url)` – fetch + parse, 1 s delay, errors logged not raised.
 - `crawl_paginated(page_url, detail_pattern, pages)` – walks list pages, collects member detail links, stops when a page adds nothing new.
+- `extract_lead(url)` – (`--sample` only) opens a member detail page, collects label/value pairs (tables, `<dl>`, "Label: value" lines), maps them to `LEAD_FIELDS`, falls back to email/BD-mobile regex, keeps everything in `raw_fields`.
 - One function per association, registered in `ASSOCIATIONS`:
 
 | Key | Site | Method |
