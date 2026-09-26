@@ -10,6 +10,7 @@ Keep these up to date whenever the project changes:
 - `CLAUDE.md` – rules for Claude
 - `AGENT.md` – rules/roles for any AI agent working here
 - `ARCHITECTURE.md` – project structure and data flow
+- `STATUS.md` – current state, live infrastructure and next steps (read first in a new session)
 
 ## Project
 Social Autopilot: Next.js app on Vercel that writes daily posts (English + Bangla)
